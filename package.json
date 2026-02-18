@@ -1,0 +1,9 @@
+{
+  "name": "react-editor-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "cd playground && node node_modules/vite/bin/vite.js",
+    "build": "pnpm -r --parallel -C packages run build"
+  }
+}

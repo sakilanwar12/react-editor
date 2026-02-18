@@ -1,0 +1,62 @@
+{
+  "name": "react-editor",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "patch": "pnpm version patch",
+    "build:js": "tsup src/index.tsx --format cjs,esm --dts --clean",
+    "build:css": "tailwindcss -i ./src/styles.css -o ./dist/styles.css --minify",
+    "build:inject": "node scripts/inject-css.js",
+    "build": "pnpm run build:js && pnpm run build:css && pnpm run build:inject",
+    "publish:beta": "npm publish --tag beta --access public",
+    "publish:latest": "npm publish --access public",
+    "release": "pnpm run build && pnpm run publish:latest"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "license": "MIT",
+  "keywords": [
+    "react",
+    "react-editor",
+    "ui"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sakilanwar12/react-editor.git"
+  },
+  "author": "sakilanwar12",
+  "sideEffects": [
+    "dist/index.js",
+    "dist/index.mjs",
+    "*.css"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "private": false,
+  "files": [
+    "dist"
+  ],
+  "module": "dist/index.mjs",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.0.0-beta.7",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwindcss": "^4.0.0-beta.7",
+    "lucide-react": "^0.479.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
+  }
+}

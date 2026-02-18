@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Minimal default styles for react-editor package build */
+html, body {
+  margin: 0;
+  padding: 0;
+}
