@@ -21,6 +21,9 @@ export default function WordPressStyleEditor() {
   const [selectedBlock, setSelectedBlock] = useState<number | null>(null);
   const [showBlockMenu, setShowBlockMenu] = useState<number | null>(null);
 
+  // --- NEW: track add-button spots to hide after insertion ---
+  const [hiddenAddIds, setHiddenAddIds] = useState<number[]>([]);
+
   const addBlock = (afterId: number, type = 'paragraph', columns = 1) => {
     const newBlock: Block = {
       id: Date.now(),
@@ -34,6 +37,10 @@ export default function WordPressStyleEditor() {
     const newBlocks = [...blocks];
     newBlocks.splice(index + 1, 0, newBlock);
     setBlocks(newBlocks);
+
+    // hide the add button at the insertion spot and select the new block
+    setHiddenAddIds(prev => Array.from(new Set([...prev, afterId])));
+    setSelectedBlock(newBlock.id);
     setShowBlockMenu(null);
   };
 
@@ -137,6 +144,96 @@ export default function WordPressStyleEditor() {
     );
   };
 
+  // --- NEW helper: place caret at end ---
+  const placeCaretAtEnd = (el: Node | null) => {
+    if (!el) return;
+    const selection = window.getSelection && window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    if (selection) {
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+  };
+
+  // --- UPDATED: Uncontrolled editable component for single-column blocks ---
+  const EditableTextBlock: React.FC<{ block: Block; updateBlock: (id:number, u:Partial<Block>)=>void; className?:string; tag?: string }> =
+    ({ block, updateBlock, className, tag = 'p' }) => {
+      const ref = useRef<HTMLElement | null>(null);
+
+      React.useEffect(() => {
+        if (!ref.current) return;
+        if (ref.current.innerHTML !== (block.content || '')) {
+          ref.current.innerHTML = block.content || '';
+        }
+      }, [block.id, block.content]);
+
+      const onBlur = () => {
+        if (!ref.current) return;
+        const html = ref.current.innerHTML;
+        if (html !== block.content) updateBlock(block.id, { content: html });
+      };
+
+      const onFocus = () => {
+        // ensure content exists and caret is at end
+        if (!ref.current) return;
+        if (!ref.current.innerHTML) ref.current.innerHTML = block.content || '';
+        placeCaretAtEnd(ref.current);
+      };
+
+      const TagEl: any = tag;
+      return (
+        <TagEl
+          ref={ref as any}
+          contentEditable
+          suppressContentEditableWarning
+          onBlur={onBlur}
+          onFocus={onFocus}
+          tabIndex={0}
+          className={className}
+        />
+      );
+  };
+
+  // --- UPDATED: Uncontrolled editable component for column cells ---
+  const EditableColumn: React.FC<{ block: Block; colIndex: number; updateBlock: (id:number, u:Partial<Block>)=>void }> =
+    ({ block, colIndex, updateBlock }) => {
+      const ref = useRef<HTMLDivElement | null>(null);
+
+      React.useEffect(() => {
+        if (!ref.current) return;
+        const content = block.columnContent?.[colIndex] ?? '';
+        if (ref.current.innerHTML !== content) ref.current.innerHTML = content;
+      }, [block.id, block.columnContent, colIndex]);
+
+      const onBlur = () => {
+        if (!ref.current) return;
+        const newContent = [...(block.columnContent || [])];
+        newContent[colIndex] = ref.current.innerHTML;
+        updateBlock(block.id, { columnContent: newContent });
+      };
+
+      const onFocus = () => {
+        if (!ref.current) return;
+        const content = block.columnContent?.[colIndex] ?? '';
+        if (!ref.current.innerHTML) ref.current.innerHTML = content;
+        placeCaretAtEnd(ref.current);
+      };
+
+      return (
+        <div
+          ref={ref}
+          contentEditable
+          suppressContentEditableWarning
+          onBlur={onBlur}
+          onFocus={onFocus}
+          tabIndex={0}
+          className="column-content"
+        />
+      );
+  };
+
   const renderBlock = (block: Block) => {
     const isSelected = selectedBlock === block.id;
 
@@ -146,19 +243,8 @@ export default function WordPressStyleEditor() {
           <div className="column-container" style={{ gridTemplateColumns: `repeat(${block.columns}, 1fr)` }}>
             {Array((block.columns || 1)).fill(0).map((_, colIndex) => (
               <div key={colIndex} className="column">
-                <div
-                  contentEditable
-                  suppressContentEditableWarning
-                  onInput={(e: React.FormEvent<HTMLDivElement>) => {
-                    const newContent = [...(block.columnContent || [])];
-                    newContent[colIndex] = (e.currentTarget as HTMLElement).innerHTML;
-                    updateBlock(block.id, { columnContent: newContent });
-                  }}
-                  dangerouslySetInnerHTML={{ 
-                    __html: block.columnContent?.[colIndex] || 'Column content...' 
-                  }}
-                  className="column-content"
-                />
+                {/* use uncontrolled editable column that syncs on blur */}
+                <EditableColumn block={block} colIndex={colIndex} updateBlock={updateBlock} />
               </div>
             ))}
           </div>
@@ -206,13 +292,13 @@ export default function WordPressStyleEditor() {
 
     const Tag: any = (tagMap as Record<string, any>)[block.type] || 'p';
 
+    // use uncontrolled editable text block; only update parent on blur
     return (
-      <Tag
-        contentEditable
-        suppressContentEditableWarning
-        onInput={(e: React.FormEvent<HTMLDivElement>) => updateBlock(block.id, { content: (e.currentTarget as HTMLElement).innerHTML })}
-        dangerouslySetInnerHTML={{ __html: block.content }}
+      <EditableTextBlock
+        block={block}
+        updateBlock={updateBlock}
         className={`block-content ${block.type}`}
+        tag={Tag}
       />
     );
   };
@@ -689,7 +775,11 @@ export default function WordPressStyleEditor() {
             <div key={block.id}>
               <div
                 className={`block-wrapper ${selectedBlock === block.id ? 'selected' : ''}`}
-                onClick={() => setSelectedBlock(block.id)}
+                onClick={() => {
+                  setSelectedBlock(block.id);
+                  // when user interacts with a block, ensure its add-button spot is visible again
+                  setHiddenAddIds(prev => prev.filter(id => id !== block.id));
+                }}
               >
                 <div className="block-controls">
                   <button 
@@ -729,13 +819,16 @@ export default function WordPressStyleEditor() {
               </div>
 
               <div style={{ position: 'relative' }}>
-                <button
-                  className="add-block-button"
-                  onClick={() => setShowBlockMenu(showBlockMenu === block.id ? null : block.id)}
-                >
-                  <Plus size={20} />
-                  Add Block
-                </button>
+                {/* hide add button if this spot was just used for insertion */}
+                {!hiddenAddIds.includes(block.id) && (
+                  <button
+                    className="add-block-button"
+                    onClick={() => setShowBlockMenu(showBlockMenu === block.id ? null : block.id)}
+                  >
+                    <Plus size={20} />
+                    Add Block
+                  </button>
+                )}
                 {showBlockMenu === block.id && (
                   <BlockMenu blockId={block.id} position="100%" />
                 )}
